@@ -107,7 +107,7 @@
 <h1>🚗 停车场倒车挑战</h1>
 
 <div class="hud">
-  <span class="chip">第 <b id="hudLevel">1</b>/5 关 · <span id="hudName">直线倒库</span></span>
+  <span class="chip">第 <b id="hudLevel">1</b>/<span id="hudTotal">10</span> 关 · <span id="hudName">直线倒库</span></span>
   <span class="chip">⏱ <b id="hudTime">0.0</b>s</span>
   <span class="chip">★ 最佳 <b id="hudBest">--</b></span>
   <span class="chip">💥 碰撞 <b id="hudHits">0</b></span>
@@ -157,7 +157,7 @@
 
 // ---------- 常量 ----------
 const W = 800, H = 560;
-const CAR = { w: 42, h: 84, accel: 0.10, maxF: 3.2, maxR: -2.3, drag: 0.955, brake: 0.16, turn: 0.058 };
+const CAR = { w: 42, h: 84, accel: 0.09, maxF: 2.7, maxR: -1.9, drag: 0.955, brake: 0.16, turn: 0.058 };
 const HOLD_TIME = 0.7;     // 停稳确认时间（秒）
 const SLOT_TOL = 4;        // 停车判定容差（像素）
 const MAX_TILT = 0.16;     // 允许的最大角度偏差（弧度，约9°）
@@ -231,6 +231,55 @@ const LEVELS = [
     carsH: [[250, 430]],
     walls: [[0, 240, 560, 50], [0, 544, 800, 16]],
     blocks: [[600, 336, 52, 52]],
+    bays: [[10, 36], [110, 36], [210, 36], [310, 36], [410, 36]]
+  },
+
+  // ===== 第 6~10 关：车位逐步缩小，难度提升 =====
+  {
+    name: '进阶倒库', par: 25,
+    player: { x: 650, y: 280, a: -Math.PI / 2 },
+    slot: { x: 214, y: 358, w: 94, h: 164, dir: 'V' },
+    cars: [[114, 354], [314, 354], [414, 354], [310, 36], [410, 36], [610, 36]],
+    carsH: [], walls: [], blocks: [],
+    bays: [[10, 36], [110, 36], [210, 36], [510, 36], [514, 354], [614, 354]]
+  },
+  {
+    name: '窄缝入库', par: 30,
+    player: { x: 60, y: 440, a: Math.PI / 2 },
+    slot: { x: 250, y: 40, w: 88, h: 156, dir: 'V' },
+    cars: [[346, 36], [446, 36], [546, 36], [230, 354], [330, 354]],
+    carsH: [],
+    walls: [[170, 36, 76, 168], [646, 36, 144, 168]],
+    blocks: [[430, 240, 52, 52]],
+    bays: [[10, 36], [10, 354], [430, 354], [530, 354], [630, 354]]
+  },
+  {
+    name: '高位侧方', par: 35,
+    player: { x: 700, y: 280, a: -Math.PI / 2 },
+    slot: { x: 170, y: 448, w: 152, h: 88, dir: 'H' },
+    cars: [[60, 36], [160, 36], [260, 36], [360, 36], [560, 354]],
+    carsH: [[8, 448], [330, 448]],
+    walls: [[0, 544, 800, 16]], blocks: [],
+    bays: [[460, 36]]
+  },
+  {
+    name: '双柱迷阵', par: 40,
+    player: { x: 80, y: 120, a: Math.PI / 2 },
+    slot: { x: 356, y: 40, w: 84, h: 150, dir: 'V' },
+    cars: [[10, 354], [110, 354], [560, 354], [660, 354], [660, 36]],
+    carsH: [],
+    walls: [[270, 36, 80, 160], [446, 36, 80, 160]],
+    blocks: [[386, 280, 52, 52]],
+    bays: [[210, 354], [310, 354], [460, 354]]
+  },
+  {
+    name: '终极侧方', par: 50,
+    player: { x: 60, y: 120, a: Math.PI / 2 },
+    slot: { x: 120, y: 448, w: 140, h: 82, dir: 'H' },
+    cars: [[510, 36], [610, 36], [600, 354], [700, 354]],
+    carsH: [[-24, 448], [268, 448]],
+    walls: [[0, 544, 800, 16], [420, 430, 60, 114]],
+    blocks: [[520, 300, 52, 52]],
     bays: [[10, 36], [110, 36], [210, 36], [310, 36], [410, 36]]
   }
 ];
@@ -400,6 +449,27 @@ function parkingOK() {
   return true;
 }
 
+// ---------- 倒车轨迹预测 ----------
+// 假设当前车速与转向保持不变，模拟未来 ~1.4 秒的行驶路径；
+// 若预测会撞上障碍/边界，则记录碰撞点并提前截断。
+function predictPath() {
+  const pts = [];
+  let sx = car.x, sy = car.y, sa = car.angle;
+  const ss = car.speed, st = steer;
+  let hit = null;
+  for (let i = 0; i < 84; i++) {
+    sa += st * CAR.turn * (ss / (Math.abs(ss) + 0.6));
+    sx += Math.sin(sa) * ss;
+    sy -= Math.cos(sa) * ss;
+    pts.push({ x: sx, y: sy, a: sa });
+    const poly = carPoly(sx, sy, sa);
+    for (const o of obstacles) {
+      if (satMTV(poly, rectQuad(o))) { hit = pts[pts.length - 1]; return { pts, hit }; }
+    }
+  }
+  return { pts, hit };
+}
+
 // ---------- 更新 ----------
 function update(dt) {
   const k = Math.min(2, Math.max(0.4, dt / 16.667));   // 帧率归一系数
@@ -554,6 +624,43 @@ function render(now) {
       ctx.beginPath();
       ctx.moveTo(r.ox, r.oy);
       ctx.lineTo(r.ox + r.dx * r.d, r.oy + r.dy * r.d);
+      ctx.stroke();
+    }
+  }
+
+  // 倒车预测轨迹：渐隐虚线 + 终点幽灵车轮廓
+  if (car.speed < -0.05) {
+    const { pts, hit } = predictPath();
+    const col = hit ? '255,110,96' : '144,224,160';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([7, 6]);
+    for (let i = 1; i < pts.length; i++) {
+      const a = 0.15 + 0.45 * (1 - i / pts.length);
+      ctx.strokeStyle = `rgba(${col},${a.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+      ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // 终点：幽灵车轮廓（碰撞点或预测终点）
+    const end = hit || pts[pts.length - 1];
+    ctx.save();
+    ctx.translate(end.x, end.y);
+    ctx.rotate(end.a);
+    ctx.strokeStyle = `rgba(${col},.8)`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    rr(-CAR.w / 2, -CAR.h / 2, CAR.w, CAR.h, 9); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    if (hit) {
+      // 碰撞点标记 ×
+      ctx.strokeStyle = `rgba(${col},.9)`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(end.x - 8, end.y - 8); ctx.lineTo(end.x + 8, end.y + 8);
+      ctx.moveTo(end.x + 8, end.y - 8); ctx.lineTo(end.x - 8, end.y + 8);
       ctx.stroke();
     }
   }
@@ -743,6 +850,7 @@ function updateHUD(force) {
     lastTimeText = t;
   }
   $('hudLevel').textContent = level + 1;
+  $('hudTotal').textContent = LEVELS.length;
   $('hudName').textContent = levelData ? levelData.name : '';
   $('hudHits').textContent = hits;
   const best = parseFloat(store.get('pg_best_' + level));
@@ -834,7 +942,7 @@ car = { x: levelData.player.x, y: levelData.player.y, angle: levelData.player.a,
 updateHUD(true);
 showOverlay({
   title: '停车场倒车挑战',
-  msg: '模拟真实停车场，考验你的倒车技术！<br>共 5 个关卡：直线倒库 → 侧方停车 → 狭窄车位 → 障碍绕行 → 终极考验。<br>把车完整停进绿色车位并停稳即可过关。',
+  msg: '模拟真实停车场，考验你的倒车技术！<br>共 10 个关卡：前 5 关练基本功，后 5 关车位越来越小。<br>倒车时会有绿色预测轨迹线帮你预判路线。',
   btn: '开始游戏',
   sub: '建议使用键盘 ↑↓←→ 操作',
   onBtn: () => loadLevel(0)

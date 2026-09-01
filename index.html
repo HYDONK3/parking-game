@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>停车场倒车挑战</title>
+<meta name="description" content="纯网页版倒车小游戏：5 个关卡，倒车雷达、星级评分，考验你的停车技术！键盘方向键操作。">
+<meta property="og:title" content="🚗 停车场倒车挑战">
+<meta property="og:description" content="5 个关卡的倒车小游戏：直线倒库、侧方停车、狭窄车位……把车停进车位就算你赢！">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    background: linear-gradient(160deg, #10141f 0%, #1a2233 60%, #141a28 100%);
+    color: #e8ecf2;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 14px 10px 24px;
+    user-select: none;
+  }
+  h1 { font-size: 26px; letter-spacing: 3px; margin-bottom: 10px; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+  .hud {
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center;
+    margin-bottom: 10px; width: 100%; max-width: 860px;
+  }
+  .chip {
+    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.09);
+    padding: 5px 12px; border-radius: 999px; font-size: 13px; color: #b9c4d4; white-space: nowrap;
+  }
+  .chip b { color: #ffd76a; font-size: 14px; }
+  .icon-btn {
+    background: rgba(255,255,255,.09); color: #e8ecf2; border: 1px solid rgba(255,255,255,.14);
+    width: 34px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,.18); }
+  .stage { position: relative; width: 100%; max-width: 860px; }
+  canvas {
+    display: block; width: 100%; height: auto; border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+    background: #3b4048;
+  }
+  #toast {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(10,14,22,.85); border: 1px solid rgba(255,255,255,.15);
+    color: #ffd76a; font-size: 16px; letter-spacing: 2px;
+    padding: 8px 22px; border-radius: 999px; opacity: 0; pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { animation: toast 2.4s ease forwards; }
+  @keyframes toast {
+    0% { opacity: 0; transform: translate(-50%, -8px); }
+    12% { opacity: 1; transform: translate(-50%, 0); }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .help { margin-top: 12px; font-size: 13px; color: #8fa0b5; text-align: center; line-height: 2; max-width: 860px; }
+  kbd {
+    background: #232c3d; padding: 2px 9px; border-radius: 5px;
+    border: 1px solid #3a465c; border-bottom-width: 2px; font-family: inherit; font-size: 12px;
+  }
+  /* 触屏按钮：仅触摸设备显示 */
+  #touch { display: none; }
+  @media (hover: none) and (pointer: coarse) {
+    #touch {
+      display: block; position: absolute; inset: 0; pointer-events: none;
+    }
+    .pad {
+      position: absolute; bottom: 12px; display: flex; gap: 10px; pointer-events: auto;
+    }
+    .pad.left { left: 12px; }
+    .pad.right { right: 12px; }
+    .tbtn {
+      width: 58px; height: 58px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25);
+      background: rgba(20,26,38,.55); color: #fff; font-size: 22px; touch-action: none;
+    }
+    .tbtn:active { background: rgba(255,215,106,.35); }
+  }
+  /* 覆盖层 */
+  #overlay {
+    position: fixed; inset: 0; background: rgba(8,11,18,.78); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px;
+  }
+  #overlay.hidden { display: none; }
+  .panel {
+    background: linear-gradient(170deg, #1d2536, #161d2c);
+    border: 1px solid rgba(255,255,255,.12); border-radius: 18px;
+    padding: 34px 40px; text-align: center; max-width: 480px; width: 100%;
+    box-shadow: 0 24px 70px rgba(0,0,0,.6);
+  }
+  .panel h2 { font-size: 30px; margin-bottom: 10px; letter-spacing: 2px; }
+  .panel .stars { font-size: 34px; letter-spacing: 6px; margin: 6px 0 4px; min-height: 42px; }
+  .panel .stars .on { color: #ffd76a; text-shadow: 0 0 14px rgba(255,215,106,.6); }
+  .panel .stars .off { color: #3a465c; }
+  .panel p { color: #aeb9ca; font-size: 14.5px; line-height: 2; margin-bottom: 14px; }
+  .panel .go {
+    font-size: 18px; padding: 11px 44px; border: none; border-radius: 10px;
+    background: linear-gradient(135deg, #4caf50, #43a047); color: #fff; cursor: pointer;
+    letter-spacing: 3px; box-shadow: 0 6px 18px rgba(76,175,80,.35);
+  }
+  .panel .go:hover { filter: brightness(1.12); }
+  .panel .sub { font-size: 12px; color: #67788f; margin-top: 12px; margin-bottom: 0; }
+  .panel .keys { display: flex; justify-content: center; gap: 10px; margin: 10px 0 18px; flex-wrap: wrap; }
+  .panel .keys span { background: rgba(255,255,255,.06); border-radius: 8px; padding: 7px 12px; font-size: 13px; color: #c6d0de; }
+</style>
+</head>
+<body>
+<h1>🚗 停车场倒车挑战</h1>
+
+<div class="hud">
+  <span class="chip">第 <b id="hudLevel">1</b>/5 关 · <span id="hudName">直线倒库</span></span>
+  <span class="chip">⏱ <b id="hudTime">0.0</b>s</span>
+  <span class="chip">★ 最佳 <b id="hudBest">--</b></span>
+  <span class="chip">💥 碰撞 <b id="hudHits">0</b></span>
+  <button id="btnSound" class="icon-btn" title="声音开关">🔊</button>
+  <button id="btnRestart" class="icon-btn" title="重玩本关 (R)">↻</button>
+</div>
+
+<div class="stage">
+  <canvas id="game" width="800" height="560"></canvas>
+  <div id="toast"></div>
+  <div id="touch">
+    <div class="pad left">
+      <button class="tbtn" data-k="ArrowLeft">◀</button>
+      <button class="tbtn" data-k="ArrowRight">▶</button>
+    </div>
+    <div class="pad right">
+      <button class="tbtn" data-k="ArrowDown">▼</button>
+      <button class="tbtn" data-k="ArrowUp">▲</button>
+    </div>
+  </div>
+</div>
+
+<p class="help">
+  <kbd>↑</kbd> 前进　<kbd>↓</kbd> 倒车　<kbd>←</kbd> <kbd>→</kbd> 转向　<kbd>R</kbd> 重玩　<kbd>P</kbd> 暂停<br>
+  把车完整停进绿色车位并停稳，保持约 1 秒即可过关。倒车时注意雷达提示音 🔉
+</p>
+
+<div id="overlay">
+  <div class="panel">
+    <h2 id="ovTitle">停车场倒车挑战</h2>
+    <div class="stars" id="ovStars"></div>
+    <p id="ovMsg">模拟真实停车场，考验你的倒车技术！<br>共有 5 个关卡，从直线倒库到侧方停车，逐级挑战。</p>
+    <div class="keys">
+      <span>↑ 前进</span><span>↓ 倒车</span><span>← → 转向</span><span>R 重玩</span>
+    </div>
+    <button class="go" id="ovBtn">开始游戏</button>
+    <p class="sub" id="ovSub">支持键盘与触屏操作</p>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================
+ *  停车场倒车挑战 —— 单文件 HTML 小游戏
+ *  Canvas 渲染 / 自定义碰撞(SAT+MTV) / 倒车雷达 / WebAudio 音效
+ * ========================================================= */
+
+// ---------- 常量 ----------
+const W = 800, H = 560;
+const CAR = { w: 42, h: 84, accel: 0.10, maxF: 3.2, maxR: -2.3, drag: 0.955, brake: 0.16, turn: 0.058 };
+const HOLD_TIME = 0.7;     // 停稳确认时间（秒）
+const SLOT_TOL = 4;        // 停车判定容差（像素）
+const MAX_TILT = 0.16;     // 允许的最大角度偏差（弧度，约9°）
+const PALETTE = ['#7c5cbf', '#4f7cac', '#c06c5c', '#5c8a72', '#9a9a9a', '#b08d57'];
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let dpr = 1;
+function fitCanvas() {
+  dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+}
+fitCanvas();
+addEventListener('resize', fitCanvas);
+
+const $ = id => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+
+// ---------- 关卡数据 ----------
+// cars:  竖直车位 [x,y]（车位 100x170，内含一台 42x84 的车）
+// carsH: 横向车位 [x,y]（车位 170x100）
+// walls: 墙/路缘 [x,y,w,h]   blocks: 立柱 [x,y,w,h]
+// bays:  装饰空车位 [x,y]（仅画线，无碰撞）
+const LEVELS = [
+  {
+    name: '直线倒库', par: 15,
+    player: { x: 650, y: 280, a: -Math.PI / 2 },
+    slot: { x: 110, y: 354, w: 100, h: 170, dir: 'V' },
+    cars: [[10, 354], [210, 354], [310, 354], [310, 36], [410, 36], [610, 36]],
+    carsH: [], walls: [], blocks: [],
+    bays: [[10, 36], [110, 36], [210, 36], [510, 36], [410, 354], [510, 354], [610, 354]]
+  },
+  {
+    name: '侧方停车', par: 25,
+    player: { x: 700, y: 280, a: -Math.PI / 2 },
+    slot: { x: 170, y: 440, w: 170, h: 100, dir: 'H' },
+    cars: [[60, 36], [160, 36], [260, 36], [460, 36], [560, 36], [660, 36]],
+    carsH: [[-14, 440], [356, 440]],
+    walls: [[0, 544, 800, 16]], blocks: [],
+    bays: [[360, 36], [542, 440]]
+  },
+  {
+    name: '狭窄车位', par: 30,
+    player: { x: 110, y: 280, a: Math.PI / 2 },
+    slot: { x: 560, y: 36, w: 100, h: 170, dir: 'V' },
+    cars: [[10, 354], [300, 354], [400, 354], [10, 36], [110, 36], [210, 36], [310, 36]],
+    carsH: [],
+    walls: [[440, 36, 112, 170], [668, 36, 112, 170]],
+    blocks: [[260, 244, 52, 52]],
+    bays: [[600, 354], [700, 354]]
+  },
+  {
+    name: '障碍绕行', par: 35,
+    player: { x: 60, y: 440, a: Math.PI / 2 },
+    slot: { x: 690, y: 36, w: 100, h: 170, dir: 'V' },
+    cars: [[230, 354], [440, 354], [110, 36], [320, 36], [530, 36]],
+    carsH: [],
+    walls: [[200, 240, 160, 60], [430, 240, 160, 60]],
+    blocks: [],
+    bays: [[10, 36], [10, 354], [120, 354], [640, 354]]
+  },
+  {
+    name: '终极考验', par: 45,
+    player: { x: 745, y: 120, a: Math.PI },
+    slot: { x: 60, y: 430, w: 170, h: 100, dir: 'H' },
+    cars: [[610, 36], [430, 354], [700, 354]],
+    carsH: [[250, 430]],
+    walls: [[0, 240, 560, 50], [0, 544, 800, 16]],
+    blocks: [[600, 336, 52, 52]],
+    bays: [[10, 36], [110, 36], [210, 36], [310, 36], [410, 36]]
+  }
+];
+
+// ---------- 音效 ----------
+let audioOn = store.get('pg_mute') !== '1';
+let actx = null;
+function ensureAudio() {
+  if (!actx) {
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (actx && actx.state === 'suspended') actx.resume();
+}
+function tone(freq, dur, type = 'sine', vol = 0.12, slideTo = 0) {
+  if (!audioOn || !actx) return;
+  const t = actx.currentTime;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(30, slideTo), t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(actx.destination);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+const sfx = {
+  beep: close => tone(close ? 1150 : 820, 0.07, 'square', 0.06),
+  crash: () => tone(140, 0.22, 'sawtooth', 0.2, 55),
+  win() {
+    tone(523, 0.14, 'sine', 0.15);
+    setTimeout(() => tone(659, 0.14, 'sine', 0.15), 130);
+    setTimeout(() => tone(784, 0.16, 'sine', 0.15), 260);
+    setTimeout(() => tone(1047, 0.3, 'sine', 0.16), 400);
+  },
+  click: () => tone(660, 0.05, 'sine', 0.07)
+};
+
+// ---------- 状态 ----------
+let state = 'menu';          // menu | play | paused | win
+let level = 0;
+let car, obstacles, slot, levelData;
+let hits = 0, elapsed = 0, parkT = 0;
+let steer = 0, hitCd = 0, hitFlash = 0, shake = 0;
+let beepT = 0, radarMin = Infinity;
+let winInfo = null;
+
+const keys = {};
+const KEYMAP = {
+  ArrowUp: 'up', w: 'up', W: 'up',
+  ArrowDown: 'down', s: 'down', S: 'down',
+  ArrowLeft: 'left', a: 'left', A: 'left',
+  ArrowRight: 'right', d: 'right', D: 'right'
+};
+
+// 关卡装载：把"车位坐标的车"展开为真实碰撞尺寸，并记录车位框用于绘制
+function loadLevel(i) {
+  level = i;
+  levelData = LEVELS[i];
+  const L = levelData;
+  car = { x: L.player.x, y: L.player.y, angle: L.player.a, speed: 0 };
+  slot = L.slot;
+  obstacles = [];
+  L.cars.forEach(([x, y], idx) => {
+    obstacles.push({ t: 'car', x: x + 29, y: y + 43, w: 42, h: 84, bay: { x, y, w: 100, h: 170 }, c: PALETTE[idx % PALETTE.length] });
+  });
+  L.carsH.forEach(([x, y], idx) => {
+    obstacles.push({ t: 'car', x: x + 43, y: y + 29, w: 84, h: 42, bay: { x, y, w: 170, h: 100 }, c: PALETTE[(idx + 2) % PALETTE.length] });
+  });
+  L.walls.forEach(([x, y, w, h]) => obstacles.push({ t: 'wall', x, y, w, h }));
+  L.blocks.forEach(([x, y, w, h]) => obstacles.push({ t: 'block', x, y, w, h }));
+  // 画布四周隐形边界墙，防止车开出场地
+  [[-60, -60, W + 120, 60], [-60, H, W + 120, 60], [-60, 0, 60, H], [W, 0, 60, H]]
+    .forEach(([x, y, w, h]) => obstacles.push({ t: 'wall', x, y, w, h, hidden: true }));
+  hits = 0; elapsed = 0; parkT = 0; steer = 0; hitCd = 0; hitFlash = 0; shake = 0;
+  winInfo = null;
+  state = 'play';
+  updateHUD(true);
+  showToast(`第 ${i + 1} 关 · ${L.name}`);
+  hideOverlay();
+}
+
+// ---------- 几何工具 ----------
+function carPoly(px = car.x, py = car.y, a = car.angle) {
+  const c = Math.cos(a), s = Math.sin(a), hw = CAR.w / 2, hh = CAR.h / 2;
+  return [
+    { x: px - hw * c + hh * s, y: py - hw * s - hh * c },
+    { x: px + hw * c + hh * s, y: py + hw * s - hh * c },
+    { x: px + hw * c - hh * s, y: py + hw * s + hh * c },
+    { x: px - hw * c - hh * s, y: py - hw * s + hh * c }
+  ];
+}
+function rectQuad(r) {
+  return [{ x: r.x, y: r.y }, { x: r.x + r.w, y: r.y }, { x: r.x + r.w, y: r.y + r.h }, { x: r.x, y: r.y + r.h }];
+}
+// SAT：返回把 A 推出 B 的最小平移向量，不相交返回 null
+function satMTV(A, B) {
+  let minDepth = Infinity, mtv = null;
+  const polys = [A, B];
+  for (const P of polys) {
+    for (let i = 0; i < P.length; i++) {
+      const p1 = P[i], p2 = P[(i + 1) % P.length];
+      let nx = p2.y - p1.y, ny = p1.x - p2.x;
+      const len = Math.hypot(nx, ny);
+      if (len < 1e-9) continue;
+      nx /= len; ny /= len;
+      let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity;
+      for (const p of A) { const d = p.x * nx + p.y * ny; if (d < minA) minA = d; if (d > maxA) maxA = d; }
+      for (const p of B) { const d = p.x * nx + p.y * ny; if (d < minB) minB = d; if (d > maxB) maxB = d; }
+      const overlap = Math.min(maxA, maxB) - Math.max(minA, minB);
+      if (overlap <= 0) return null;
+      if (overlap < minDepth) {
+        minDepth = overlap;
+        const dir = (minA + maxA) / 2 < (minB + maxB) / 2 ? -1 : 1;
+        mtv = { x: nx * dir * overlap, y: ny * dir * overlap };
+      }
+    }
+  }
+  return mtv;
+}
+// 射线 vs AABB（slab 法）
+function raySlab(ox, oy, dx, dy, r) {
+  let tmin = -Infinity, tmax = Infinity;
+  if (Math.abs(dx) < 1e-9) { if (ox < r.x || ox > r.x + r.w) return Infinity; }
+  else {
+    let t1 = (r.x - ox) / dx, t2 = (r.x + r.w - ox) / dx;
+    if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+    tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+  }
+  if (Math.abs(dy) < 1e-9) { if (oy < r.y || oy > r.y + r.h) return Infinity; }
+  else {
+    let t1 = (r.y - oy) / dy, t2 = (r.y + r.h - oy) / dy;
+    if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+    tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+  }
+  if (tmax < Math.max(tmin, 0)) return Infinity;
+  return tmin > 0 ? tmin : 0;
+}
+function castRay(ox, oy, dx, dy, maxD) {
+  let best = maxD;
+  // 画布边界
+  const bounds = [];
+  if (dx < -1e-9) bounds.push((0 - ox) / dx);
+  if (dx > 1e-9) bounds.push((W - ox) / dx);
+  if (dy < -1e-9) bounds.push((0 - oy) / dy);
+  if (dy > 1e-9) bounds.push((H - oy) / dy);
+  for (const t of bounds) if (t > 0 && t < best) best = t;
+  for (const o of obstacles) {
+    const t = raySlab(ox, oy, dx, dy, o);
+    if (t < best) best = t;
+  }
+  return best;
+}
+
+// ---------- 停车判定 ----------
+function parkingOK() {
+  // 1) 角度：与车位方向偏差 < MAX_TILT（车头车尾朝向均可）
+  let a = ((car.angle % Math.PI) + Math.PI) % Math.PI;
+  const target = slot.dir === 'V' ? 0 : Math.PI / 2;
+  const diff = slot.dir === 'V' ? Math.min(a, Math.PI - a) : Math.abs(a - target);
+  if (diff > MAX_TILT) return false;
+  // 2) 位置：车身四角全部落在车位范围内（允许 SLOT_TOL 容差）
+  const poly = carPoly();
+  for (const p of poly) {
+    if (p.x < slot.x - SLOT_TOL || p.x > slot.x + slot.w + SLOT_TOL) return false;
+    if (p.y < slot.y - SLOT_TOL || p.y > slot.y + slot.h + SLOT_TOL) return false;
+  }
+  return true;
+}
+
+// ---------- 更新 ----------
+function update(dt) {
+  const k = Math.min(2, Math.max(0.4, dt / 16.667));   // 帧率归一系数
+  hitCd = Math.max(0, hitCd - dt / 1000);
+  hitFlash = Math.max(0, hitFlash - dt / 400);
+  elapsed += dt / 1000;
+
+  // 油门 / 倒车
+  const up = keys.up, down = keys.down;
+  if (up && !down) car.speed += CAR.accel * k;
+  else if (down && !up) car.speed -= CAR.accel * k;
+  else car.speed *= Math.pow(CAR.drag, k);
+  if (up && car.speed < 0) car.speed += CAR.brake * k;   // 反向刹车
+  if (down && car.speed > 0) car.speed -= CAR.brake * k;
+  car.speed = Math.max(CAR.maxR, Math.min(CAR.maxF, car.speed));
+  if (Math.abs(car.speed) < 0.012) car.speed = 0;
+
+  // 转向（速度越快越早打满；倒车自动反向，符合真实感）
+  const target = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
+  steer += (target - steer) * Math.min(1, 0.2 * k);
+  car.angle += steer * CAR.turn * (car.speed / (Math.abs(car.speed) + 0.6)) * k;
+
+  // 位移
+  car.x += Math.sin(car.angle) * car.speed * k;
+  car.y -= Math.cos(car.angle) * car.speed * k;
+
+  // 碰撞检测 + 推出（SAT/MTV，可沿墙体滑动）
+  let poly = carPoly();
+  for (const o of obstacles) {
+    const m = satMTV(poly, rectQuad(o));
+    if (m) {
+      car.x += m.x; car.y += m.y;
+      poly = carPoly();
+      if (hitCd <= 0) {
+        hits++; hitCd = 0.6; hitFlash = 1; shake = 9;
+        car.speed *= -0.25;
+        sfx.crash();
+        updateHUD();
+      } else {
+        car.speed *= 0.7;
+      }
+    }
+  }
+
+  // 倒车雷达
+  radarMin = Infinity;
+  if (car.speed < -0.05) {
+    const back = car.angle + Math.PI;
+    const c = Math.cos(car.angle), s = Math.sin(car.angle);
+    const probes = [[-13, 44], [0, 47], [13, 44]];
+    const spread = [-0.38, 0, 0.38];
+    for (let i = 0; i < 3; i++) {
+      const [lx, ly] = probes[i];
+      const ox = car.x + lx * c - ly * s, oy = car.y + lx * s + ly * c;
+      const a = back + spread[i];
+      const dx = Math.sin(a), dy = -Math.cos(a);
+      const d = castRay(ox, oy, dx, dy, 150);
+      radarMin = Math.min(radarMin, d);
+      probes[i].d = d; probes[i].ox = ox; probes[i].oy = oy; probes[i].dx = dx; probes[i].dy = dy;
+    }
+    probes.rays = probes.map(p => p);
+    radarRays = probes;
+    beepT -= dt / 1000;
+    if (radarMin < 145 && beepT <= 0) {
+      sfx.beep(radarMin < 45);
+      beepT = 0.09 + Math.max(0, Math.min(1, (radarMin - 20) / 125)) * 0.45;
+    }
+  } else {
+    radarRays = null;
+  }
+
+  // 停车判定：位置角度达标 + 停稳 持续 HOLD_TIME
+  if (parkingOK() && Math.abs(car.speed) < 0.06) {
+    parkT += dt / 1000;
+    if (parkT >= HOLD_TIME) winLevel();
+  } else {
+    parkT = 0;
+  }
+
+  updateHUD();
+}
+let radarRays = null;
+
+// ---------- 过关 ----------
+function starCount(t, h) {
+  if (h === 0 && t <= levelData.par) return 3;
+  if (h <= 2 && t <= levelData.par * 1.8) return 2;
+  return 1;
+}
+function winLevel() {
+  state = 'win';
+  const t = +elapsed.toFixed(1);
+  const stars = starCount(t, hits);
+  const key = 'pg_best_' + level;
+  const prev = parseFloat(store.get(key));
+  const isRecord = isNaN(prev) || t < prev;
+  if (isRecord) store.set(key, t.toFixed(1));
+  sfx.win();
+  updateHUD(true);
+
+  const last = level + 1 >= LEVELS.length;
+  const starHtml = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+  const spanned = stars === 3 ? ' class="on"' : '';
+  showOverlay({
+    title: last ? '🏆 全部通关！' : '✅ 停车成功！',
+    stars: `<span${spanned}>${starHtml}</span>`,
+    msg: `用时 <b style="color:#ffd76a">${t}s</b>（目标 ${levelData.par}s）　碰撞 <b style="color:#ff8a80">${hits}</b> 次`
+      + (isRecord ? '<br>🎉 新纪录！' : ''),
+    btn: last ? '再来一局' : '下一关 ▶',
+    sub: last ? '恭喜你完成全部关卡，可以分享给朋友挑战！' : `下一关：第 ${level + 2} 关 · ${LEVELS[level + 1].name}`,
+    onBtn: () => loadLevel(last ? 0 : level + 1)
+  });
+}
+
+// ---------- 渲染 ----------
+function render(now) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (shake > 0.5) {
+    ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    shake *= 0.85;
+  } else shake = 0;
+
+  // 地面
+  ctx.fillStyle = '#3b4048';
+  ctx.fillRect(-12, -12, W + 24, H + 24);
+  ctx.strokeStyle = 'rgba(255,255,255,.03)';
+  ctx.lineWidth = 1;
+  for (let x = 40; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 40; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  // 装饰空车位
+  ctx.strokeStyle = 'rgba(255,255,255,.28)';
+  ctx.lineWidth = 2;
+  for (const [x, y] of levelData.bays) {
+    const isH = levelData.carsH.some(([bx, by]) => bx === x && by === y);
+    const w = isH ? 170 : 100, h = isH ? 100 : 170;
+    ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
+  }
+
+  // 障碍物
+  for (const o of obstacles) drawObstacle(o);
+
+  // 目标车位
+  drawSlot(now);
+
+  // 倒车雷达射线
+  if (radarRays) {
+    for (const r of radarRays) {
+      const col = r.d < 45 ? '255,82,82' : r.d < 85 ? '255,213,79' : '129,199,132';
+      ctx.strokeStyle = `rgba(${col},.55)`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(r.ox, r.oy);
+      ctx.lineTo(r.ox + r.dx * r.d, r.oy + r.dy * r.d);
+      ctx.stroke();
+    }
+  }
+
+  // 玩家车
+  drawPlayer();
+
+  // 停车确认进度环
+  if (parkT > 0) {
+    const p = Math.min(1, parkT / HOLD_TIME);
+    ctx.strokeStyle = 'rgba(0,0,0,.45)';
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.arc(car.x, car.y, 30, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = '#4caf50';
+    ctx.beginPath(); ctx.arc(car.x, car.y, 30, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('停稳中…', car.x, car.y + 52);
+  }
+}
+
+function drawObstacle(o) {
+  if (o.hidden) return;
+  if (o.t === 'car') {
+    // 车位画线
+    if (o.bay) {
+      ctx.strokeStyle = 'rgba(255,255,255,.28)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(o.bay.x + 2, o.bay.y + 2, o.bay.w - 4, o.bay.h - 4);
+    }
+    const vert = o.h > o.w;
+    drawCarBody(o.x + o.w / 2, o.y + o.h / 2, vert ? 0 : Math.PI / 2, o.c, {});
+  } else if (o.t === 'wall') {
+    ctx.fillStyle = '#2b3242';
+    ctx.fillRect(o.x, o.y, o.w, o.h);
+    ctx.strokeStyle = 'rgba(255,255,255,.10)';
+    ctx.lineWidth = 1;
+    for (let y = o.y + 10; y < o.y + o.h; y += 10) {
+      ctx.beginPath(); ctx.moveTo(o.x, y); ctx.lineTo(o.x + o.w, y); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,.22)';
+    ctx.strokeRect(o.x + 0.5, o.y + 0.5, o.w - 1, o.h - 1);
+  } else if (o.t === 'block') {
+    ctx.fillStyle = '#565d6b';
+    rr(o.x, o.y, o.w, o.h, 5); ctx.fill();
+    ctx.save();
+    rr(o.x, o.y, o.w, o.h, 5); ctx.clip();
+    ctx.strokeStyle = '#f2c14e';
+    ctx.lineWidth = 5;
+    for (let i = -o.h; i < o.w + o.h; i += 16) {
+      ctx.beginPath(); ctx.moveTo(o.x + i, o.y + o.h + 3); ctx.lineTo(o.x + i + o.h, o.y - 3); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(0,0,0,.4)';
+    ctx.lineWidth = 2;
+    rr(o.x + 1, o.y + 1, o.w - 2, o.h - 2, 5); ctx.stroke();
+  }
+}
+
+function drawSlot(now) {
+  const pulse = 0.15 + 0.07 * Math.sin(now / 240);
+  ctx.fillStyle = `rgba(76,175,80,${pulse.toFixed(3)})`;
+  ctx.fillRect(slot.x, slot.y, slot.w, slot.h);
+  ctx.strokeStyle = '#4caf50';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([]);
+  ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
+  ctx.setLineDash([7, 6]);
+  ctx.strokeStyle = 'rgba(76,175,80,.55)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(slot.x + 7, slot.y + 7, slot.w - 14, slot.h - 14);
+  ctx.setLineDash([]);
+
+  const cx = slot.x + slot.w / 2;
+  ctx.fillStyle = '#4caf50';
+  ctx.textAlign = 'center';
+  if (slot.dir === 'V') {
+    ctx.font = 'bold 30px "Microsoft YaHei", sans-serif';
+    ctx.fillText('P', cx, slot.y + slot.h / 2 + 2);
+    // 入库方向箭头（车位在上半场→向上入库；下半场→向下）
+    const up = slot.y < H / 2;
+    const ay = slot.y + slot.h / 2 + (up ? 42 : -42);
+    ctx.beginPath();
+    if (up) { ctx.moveTo(cx, ay - 10); ctx.lineTo(cx - 7, ay + 2); ctx.lineTo(cx + 7, ay + 2); }
+    else { ctx.moveTo(cx, ay + 10); ctx.lineTo(cx - 7, ay - 2); ctx.lineTo(cx + 7, ay - 2); }
+    ctx.closePath(); ctx.fill();
+  } else {
+    ctx.font = 'bold 26px "Microsoft YaHei", sans-serif';
+    ctx.fillText('P', cx, slot.y + slot.h / 2 + 8);
+  }
+}
+
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawCarBody(x, y, angle, color, o) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  const w = CAR.w, h = CAR.h;
+  ctx.fillStyle = 'rgba(0,0,0,.32)';
+  rr(-w / 2 + 3, -h / 2 + 5, w, h, 9); ctx.fill();
+  ctx.fillStyle = color;
+  rr(-w / 2, -h / 2, w, h, 9); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.16)';
+  rr(-w / 2 + 3, -h / 2 + 4, w - 6, 10, 6); ctx.fill();
+  ctx.fillStyle = '#232b3a';
+  rr(-w / 2 + 6, -h / 2 + 16, w - 12, 15, 4); ctx.fill();
+  rr(-w / 2 + 6, h / 2 - 26, w - 12, 12, 4); ctx.fill();
+  // 车灯
+  ctx.fillStyle = '#fff6c9';
+  ctx.fillRect(-w / 2 + 5, -h / 2 + 1, 8, 4);
+  ctx.fillRect(w / 2 - 13, -h / 2 + 1, 8, 4);
+  ctx.fillStyle = '#d84b40';
+  ctx.fillRect(-w / 2 + 5, h / 2 - 5, 8, 4);
+  ctx.fillRect(w / 2 - 13, h / 2 - 5, 8, 4);
+  ctx.restore();
+}
+
+function drawPlayer() {
+  const reversing = car.speed < -0.05;
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.angle);
+  const w = CAR.w, h = CAR.h;
+  const body = hitFlash > 0 ? '#e05a4e' : '#f0c33c';
+
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  rr(-w / 2 + 3, -h / 2 + 5, w, h, 9); ctx.fill();
+  ctx.fillStyle = body;
+  rr(-w / 2, -h / 2, w, h, 9); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.2)';
+  rr(-w / 2 + 3, -h / 2 + 4, w - 6, 10, 6); ctx.fill();
+  // 车窗
+  ctx.fillStyle = '#232b3a';
+  rr(-w / 2 + 6, -h / 2 + 16, w - 12, 15, 4); ctx.fill();
+  rr(-w / 2 + 6, h / 2 - 26, w - 12, 12, 4); ctx.fill();
+  // 车顶"学"牌（教练车）
+  ctx.fillStyle = '#2e6fd8';
+  rr(-9, -10, 18, 18, 4); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('学', 0, 4);
+  // 前大灯
+  ctx.fillStyle = '#fff6c9';
+  ctx.fillRect(-w / 2 + 5, -h / 2 + 1, 8, 4);
+  ctx.fillRect(w / 2 - 13, -h / 2 + 1, 8, 4);
+  // 尾灯：刹车/倒车更亮
+  ctx.fillStyle = reversing ? '#ff5b52' : '#b23a32';
+  ctx.fillRect(-w / 2 + 5, h / 2 - 5, 8, 4);
+  ctx.fillRect(w / 2 - 13, h / 2 - 5, 8, 4);
+  // 倒车白灯
+  if (reversing) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-4, h / 2 - 5, 8, 4);
+  }
+  // 车轮（前轮随转向偏转）
+  ctx.fillStyle = '#15181e';
+  const steerVis = steer * 0.45;
+  for (const sx of [-w / 2 - 1, w / 2 - 6]) {
+    ctx.save();
+    ctx.translate(sx + 3.5, -h / 2 + 15);
+    ctx.rotate(steerVis);
+    ctx.fillRect(-3.5, -8, 7, 16);
+    ctx.restore();
+  }
+  ctx.fillRect(-w / 2 - 1, h / 2 - 23, 7, 16);
+  ctx.fillRect(w / 2 - 6, h / 2 - 23, 7, 16);
+  ctx.restore();
+}
+
+// ---------- HUD / 覆盖层 ----------
+let lastTimeText = '';
+function updateHUD(force) {
+  const t = elapsed.toFixed(1);
+  if (t !== lastTimeText || force) {
+    $('hudTime').textContent = t;
+    lastTimeText = t;
+  }
+  $('hudLevel').textContent = level + 1;
+  $('hudName').textContent = levelData ? levelData.name : '';
+  $('hudHits').textContent = hits;
+  const best = parseFloat(store.get('pg_best_' + level));
+  $('hudBest').textContent = isNaN(best) ? '--' : best.toFixed(1) + 's';
+}
+
+function showOverlay({ title, stars = '', msg = '', btn, sub = '', onBtn }) {
+  $('ovTitle').innerHTML = title;
+  $('ovStars').innerHTML = stars;
+  $('ovMsg').innerHTML = msg;
+  $('ovSub').textContent = sub;
+  const b = $('ovBtn');
+  b.textContent = btn;
+  b.onclick = () => { ensureAudio(); sfx.click(); onBtn(); };
+  $('overlay').classList.remove('hidden');
+}
+function hideOverlay() { $('overlay').classList.add('hidden'); }
+
+function showToast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+}
+
+function pauseGame() {
+  if (state !== 'play') return;
+  state = 'paused';
+  showOverlay({
+    title: '⏸ 已暂停',
+    msg: '休息一下，回来继续倒车～',
+    btn: '继续游戏',
+    sub: '也可以按 P 键继续',
+    onBtn: () => { state = 'play'; hideOverlay(); }
+  });
+}
+
+// ---------- 输入 ----------
+addEventListener('keydown', e => {
+  const k = KEYMAP[e.key];
+  if (k) { keys[k] = true; e.preventDefault(); }
+  if (e.key === 'r' || e.key === 'R') { if (state === 'play' || state === 'paused') loadLevel(level); }
+  if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+    if (state === 'play') pauseGame();
+    else if (state === 'paused') { state = 'play'; hideOverlay(); }
+  }
+});
+addEventListener('keyup', e => { const k = KEYMAP[e.key]; if (k) keys[k] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (state === 'play') pauseGame(); });
+
+// 触屏按钮
+document.querySelectorAll('.tbtn').forEach(btn => {
+  const k = KEYMAP[btn.dataset.k];
+  const on = e => { e.preventDefault(); keys[k] = true; };
+  const off = e => { e.preventDefault(); keys[k] = false; };
+  btn.addEventListener('pointerdown', on);
+  btn.addEventListener('pointerup', off);
+  btn.addEventListener('pointercancel', off);
+  btn.addEventListener('pointerleave', off);
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+$('btnRestart').onclick = () => { if (state !== 'menu') { sfx.click(); loadLevel(level); } };
+$('btnSound').onclick = function () {
+  audioOn = !audioOn;
+  store.set('pg_mute', audioOn ? '0' : '1');
+  this.textContent = audioOn ? '🔊' : '🔇';
+  if (audioOn) { ensureAudio(); sfx.click(); }
+};
+$('btnSound').textContent = audioOn ? '🔊' : '🔇';
+
+// ---------- 主循环 ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(32, now - last);
+  last = now;
+  if (state === 'play') update(dt);
+  if (levelData) render(now);
+  requestAnimationFrame(loop);
+}
+levelData = LEVELS[0];
+slot = levelData.slot;
+obstacles = [];
+levelData.cars.forEach(([x, y], idx) => obstacles.push({ t: 'car', x: x + 29, y: y + 43, w: 42, h: 84, bay: { x, y, w: 100, h: 170 }, c: PALETTE[idx % PALETTE.length] }));
+[[-60, -60, W + 120, 60], [-60, H, W + 120, 60], [-60, 0, 60, H], [W, 0, 60, H]]
+  .forEach(([x, y, w, h]) => obstacles.push({ t: 'wall', x, y, w, h, hidden: true }));
+car = { x: levelData.player.x, y: levelData.player.y, angle: levelData.player.a, speed: 0 };
+updateHUD(true);
+showOverlay({
+  title: '停车场倒车挑战',
+  msg: '模拟真实停车场，考验你的倒车技术！<br>共 5 个关卡：直线倒库 → 侧方停车 → 狭窄车位 → 障碍绕行 → 终极考验。<br>把车完整停进绿色车位并停稳即可过关。',
+  btn: '开始游戏',
+  sub: '建议使用键盘 ↑↓←→ 操作',
+  onBtn: () => loadLevel(0)
+});
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
